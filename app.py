@@ -162,3 +162,5 @@ if __name__ == '__main__':
         os.makedirs('models')
 
     app.run(host='0.0.0.0', port=5000)
+echo "[✔] Contents of models/ before Flask starts:"
+ls -l models/
