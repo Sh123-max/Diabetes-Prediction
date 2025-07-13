@@ -41,6 +41,9 @@ try:
 
 except Exception as e:
     print(f"[❌] Error loading model or metadata: {e}")
+print(f"[DEBUG] Current working directory: {os.getcwd()}")
+print(f"[DEBUG] Model path exists? {os.path.exists(model_path)}")
+print(f"[DEBUG] Metadata path exists? {os.path.exists(metadata_path)}")
 
 # -----------------------------
 # Define valid input ranges
