@@ -1,5 +1,3 @@
-pip install mlflow
-
 import os
 import pickle
 import traceback
