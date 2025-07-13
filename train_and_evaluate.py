@@ -1,9 +1,12 @@
+pip install mlflow
 
 import os
 import pickle
 import traceback
 import matplotlib.pyplot as plt
 import json
+import mlflow
+import mlflow.sklearn
 from pathlib import Path
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
@@ -78,6 +81,16 @@ best_model_name = ""
 
 print("\nTraining and evaluating models...\n")
 
+# Start MLflow experiment
+mlflow.start_run()
+
+# Log model hyperparameters and weights
+mlflow.log_param("accuracy_weight", weights["Accuracy"])
+mlflow.log_param("precision_weight", weights["Precision"])
+mlflow.log_param("recall_weight", weights["Recall"])
+mlflow.log_param("f1_weight", weights["F1-Score"])
+mlflow.log_param("roc_auc_weight", weights["ROC-AUC"])
+
 # Evaluate models
 for name, model in models.items():
     model.fit(X_train, y_train)
@@ -98,6 +111,14 @@ for name, model in models.items():
              weights['F1-Score'] * f1 +
              weights['ROC-AUC'] * auc)
 
+    # Log metrics to MLflow
+    mlflow.log_metric(f"{name}_accuracy", acc)
+    mlflow.log_metric(f"{name}_precision", prec)
+    mlflow.log_metric(f"{name}_recall", rec)
+    mlflow.log_metric(f"{name}_f1", f1)
+    mlflow.log_metric(f"{name}_roc_auc", auc)
+    mlflow.log_metric(f"{name}_weighted_score", score)
+
     # Display results
     print(f"\n{name}:")
     print(f"  Accuracy : {acc:.4f}")
@@ -113,7 +134,17 @@ for name, model in models.items():
         best_model = model
         best_model_name = name
 
-# Save the best model
+# Save the best model to MLflow
+mlflow.sklearn.log_model(best_model, "best_model")
+
+# End MLflow run
+mlflow.end_run()
+
+print("\n Model training complete.")
+print("\nBest Model Based on Weighted Healthcare Metrics:")
+print(f"{best_model_name} with Weighted Score: {best_score:.4f}")
+
+# Save best model locally
 model_save_path = 'models/best_model.pkl'
 try:
     with open(model_save_path, 'wb') as f:
@@ -123,10 +154,7 @@ except Exception as e:
     traceback.print_exc()
     exit(1)
 
-print("\n Model training complete.")
-print("\nBest Model Based on Weighted Healthcare Metrics:")
-print(f"{best_model_name} with Weighted Score: {best_score:.4f}")
-print(f" Saved model at: {os.path.abspath(model_save_path)}")
+print(f"\nSaved model at: {os.path.abspath(model_save_path)}")
 
 # Final file existence check
 print("\nChecking saved files...")
