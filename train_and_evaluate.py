@@ -17,7 +17,7 @@ from sklearn.ensemble import StackingClassifier
 
 # Show working directory
 print("Current working directory:", os.getcwd())
-
+print("Hi")
 # Create directory for models
 try:
     os.makedirs('models', exist_ok=True)
