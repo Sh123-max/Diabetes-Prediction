@@ -18,6 +18,7 @@ from mlflow.models.signature import infer_signature
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
 # Show working directory
 print("Current working directory:", os.getcwd())
@@ -39,6 +40,12 @@ except Exception as e:
     print("Error loading data:", e)
     traceback.print_exc()
     exit(1)
+
+# Ensure DataFrame format for compatibility
+if isinstance(X_train, np.ndarray):
+    X_train = pd.DataFrame(X_train)
+if isinstance(X_test, np.ndarray):
+    X_test = pd.DataFrame(X_test)
 
 # ------------------------------
 # Models + Parameter Grids
@@ -158,6 +165,7 @@ with mlflow.start_run(run_name="mlflow_gridsearch_with_plots"):
     except Exception as e:
         print("Error saving best model locally:", e)
         traceback.print_exc()
+
     print(f"Best Model: {best_model_name} (Score: {best_score:.4f})")
     print(f"Saved best model at: {os.path.abspath(model_save_path)}")
 
