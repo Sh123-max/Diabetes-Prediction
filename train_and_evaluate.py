@@ -105,12 +105,14 @@ weights = {
 mlflow.set_tracking_uri("file:///var/lib/jenkins/workspace/train_and_evaluate/mlruns")
 mlflow.set_experiment("Healthcare_Model_Comparison")
 
-# Enable MLflow autologging
+# Enable autolog for sklearn & xgboost
 mlflow.autolog(
     log_models=True,
     log_input_examples=True,
     log_model_signatures=True,
-    log_datasets=True
+    log_datasets=True,
+    exclusive=False,
+    disable=False
 )
 
 model_results = {}
@@ -120,10 +122,8 @@ best_model_name = ""
 
 print("\nStarting GridSearchCV tuning and MLflow logging...\n")
 
-with mlflow.start_run(run_name="mlflow_gridsearch_with_plots"):
-    mlflow.log_params(weights)
-
-    for name, (model, param_grid) in tuning_models.items():
+for name, (model, param_grid) in tuning_models.items():
+    with mlflow.start_run(run_name=f"mlflow_gridsearch_{name}", nested=False):
         print(f"Training with GridSearchCV: {name}")
         grid = GridSearchCV(model, param_grid, scoring='recall', cv=5)
         grid.fit(X_train, y_train)
@@ -144,70 +144,64 @@ with mlflow.start_run(run_name="mlflow_gridsearch_with_plots"):
         weighted_score = sum(weights[m] * metrics[m] for m in weights)
         metrics["Weighted Score"] = weighted_score
 
+        # Save results for comparison later
         model_results[name] = {"Model": best_model_gs, "Parameters": best_params, "Metrics": metrics}
 
-        mlflow.log_param(f"{name}_model", name)
-        for param, val in best_params.items():
-            mlflow.log_param(f"{name}_{param}", val)
-        for metric, val in metrics.items():
-            mlflow.log_metric(f"{name}_{metric}", val)
+        # Manual log of weighted score
+        mlflow.log_metric("Weighted Score", weighted_score)
 
+        # Save the model in MLflow with signature
+        input_example = X_test.iloc[:1]
+        signature = infer_signature(X_test, best_model_gs.predict_proba(X_test))
+        mlflow.sklearn.log_model(
+            sk_model=best_model_gs,
+            name=f"{name}_gridsearch_model",
+            input_example=input_example,
+            signature=signature
+        )
+
+        # Track best model
         if weighted_score > best_score:
             best_score = weighted_score
             best_model = best_model_gs
             best_model_name = name
 
-        input_example = X_test.iloc[:1]
-        signature = infer_signature(X_test, best_model_gs.predict_proba(X_test))
-        mlflow.sklearn.log_model(
-            sk_model=best_model_gs,
-            name=f"{name}_gridsearch_model",  # replaced artifact_path
-            input_example=input_example,
-            signature=signature
-        )
+# Save best model locally
+model_save_path = os.path.join(model_dir, "best_model.pkl")
+try:
+    with open(model_save_path, 'wb') as f:
+        pickle.dump(best_model, f)
+except Exception as e:
+    print("Error saving best model locally:", e)
+    traceback.print_exc()
 
-    # Save best model locally
-    model_save_path = os.path.join(model_dir, "best_model.pkl")
-    try:
-        with open(model_save_path, 'wb') as f:
-            pickle.dump(best_model, f)
-    except Exception as e:
-        print("Error saving best model locally:", e)
-        traceback.print_exc()
+print(f"Best Model: {best_model_name} (Score: {best_score:.4f})")
+print(f"Saved best model at: {os.path.abspath(model_save_path)}")
 
-    print(f"Best Model: {best_model_name} (Score: {best_score:.4f})")
-    print(f"Saved best model at: {os.path.abspath(model_save_path)}")
+# Final summary plots
+comparison_df = pd.DataFrame({
+    model: {
+        "Accuracy": res["Metrics"]["Accuracy"],
+        "Precision": res["Metrics"]["Precision"],
+        "Recall": res["Metrics"]["Recall"],
+        "F1-Score": res["Metrics"]["F1-Score"],
+        "ROC-AUC": res["Metrics"]["ROC-AUC"],
+        "Weighted Score": res["Metrics"]["Weighted Score"]
+    }
+    for model, res in model_results.items()
+}).T
 
-    # Tag in MLflow
-    mlflow.set_tag("best_model_name", best_model_name)
-    mlflow.log_metric("best_weighted_score", best_score)
-
-    # Create comparison DataFrame
-    comparison_df = pd.DataFrame({
-        model: {
-            "Accuracy": res["Metrics"]["Accuracy"],
-            "Precision": res["Metrics"]["Precision"],
-            "Recall": res["Metrics"]["Recall"],
-            "F1-Score": res["Metrics"]["F1-Score"],
-            "ROC-AUC": res["Metrics"]["ROC-AUC"],
-            "Weighted Score": res["Metrics"]["Weighted Score"]
-        }
-        for model, res in model_results.items()
-    }).T
-
-    # Plot and log metrics
-    for metric in ["Accuracy", "Precision", "Recall", "F1-Score", "ROC-AUC", "Weighted Score"]:
-        plt.figure(figsize=(12, 6))
-        sns.barplot(data=comparison_df.reset_index(), x="index", y=metric, palette="viridis", legend=False)
-        plt.title(f"Model {metric} Comparison")
-        plt.xlabel("Model")
-        plt.ylabel(metric)
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-
-        plot_file = f"{metric}_comparison.png"
-        plt.savefig(plot_file)
-        mlflow.log_artifact(plot_file)
-        os.remove(plot_file)
+for metric in ["Accuracy", "Precision", "Recall", "F1-Score", "ROC-AUC", "Weighted Score"]:
+    plt.figure(figsize=(12, 6))
+    sns.barplot(data=comparison_df.reset_index(), x="index", y=metric, palette="viridis", legend=False)
+    plt.title(f"Model {metric} Comparison")
+    plt.xlabel("Model")
+    plt.ylabel(metric)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plot_file = f"{metric}_comparison.png"
+    plt.savefig(plot_file)
+    mlflow.log_artifact(plot_file)
+    os.remove(plot_file)
 
 print("\nGridSearchCV tuning and MLflow logging complete.")
