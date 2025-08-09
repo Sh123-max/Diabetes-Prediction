@@ -151,7 +151,7 @@ for name, (model, param_grid) in tuning_models.items():
         signature = infer_signature(X_test, best_model_gs.predict_proba(X_test))
         mlflow.sklearn.log_model(
             sk_model=best_model_gs,
-            artifact_path="model",
+            name="model",
             input_example=input_example,
             signature=signature
         )
