@@ -68,7 +68,7 @@ best_score = 0.0
 best_model_name = ""
 
 print("\nTraining and evaluating models...\n")
-mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "file:///var/lib/jenkins/workspace/train_and_evaluate/mlruns"))
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 mlflow.set_experiment("Healthcare_Model_Comparison")
 with mlflow.start_run():
     mlflow.log_params(weights)
