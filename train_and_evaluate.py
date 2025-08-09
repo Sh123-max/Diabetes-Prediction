@@ -22,17 +22,11 @@ import numpy as np
 
 print("Current working directory:", os.getcwd())
 
-# Ensure clean models folder
+# Clean models folder (ignore permission errors)
 model_dir = os.path.join(os.getcwd(), "models")
 if os.path.exists(model_dir):
-    for root, dirs, files in os.walk(model_dir):
-        for file in files:
-            try:
-                os.remove(os.path.join(root, file))
-            except Exception as e:
-                print(f"Warning: could not delete {file}: {e}")
     try:
-        shutil.rmtree(model_dir)
+        shutil.rmtree(model_dir, ignore_errors=True)
     except Exception as e:
         print(f"Warning: could not remove models directory: {e}")
 os.makedirs(model_dir, exist_ok=True)
@@ -103,15 +97,14 @@ weights = {
 mlflow.set_tracking_uri("file:///var/lib/jenkins/workspace/train_and_evaluate/mlruns")
 mlflow.set_experiment("Healthcare_Model_Comparison")
 
-# Autolog (disable best_estimator logging for cleaner UI)
+# Autolog for sklearn and xgboost
 mlflow.autolog(
     log_models=True,
     log_input_examples=True,
     log_model_signatures=True,
     log_datasets=True,
     exclusive=False,
-    disable=False,
-    log_best_estimator=False
+    disable=False
 )
 
 model_results = {}
@@ -121,12 +114,16 @@ best_model_name = ""
 
 print("\nStarting GridSearchCV tuning and MLflow logging...\n")
 
-# Parent run so Runs tab shows everything
-with mlflow.start_run(run_name="full_model_training"):
+# Parent run for grouping in UI
+with mlflow.start_run(run_name="full_model_training") as parent_run:
+    exp_id = mlflow.get_experiment_by_name("Healthcare_Model_Comparison").experiment_id
 
     for name, (model, param_grid) in tuning_models.items():
-        with mlflow.start_run(run_name=name, nested=True):
+        with mlflow.start_run(run_name=name, nested=True) as child_run:
+            run_link = f"{mlflow.get_tracking_uri().replace('file://', '')}/#/experiments/{exp_id}/runs/{child_run.info.run_id}"
             print(f"Training with GridSearchCV: {name}")
+            print(f"MLflow Run Link: {run_link}")
+
             grid = GridSearchCV(model, param_grid, scoring='recall', cv=5)
             grid.fit(X_train, y_train)
 
@@ -149,7 +146,7 @@ with mlflow.start_run(run_name="full_model_training"):
             model_results[name] = {"Model": best_model_gs, "Parameters": best_params, "Metrics": metrics}
             mlflow.log_metric("Weighted Score", weighted_score)
 
-            # Log clean model name
+            # Log clean model name (no "_gridsearch_model")
             input_example = X_test.iloc[:1]
             signature = infer_signature(X_test, best_model_gs.predict_proba(X_test))
             mlflow.sklearn.log_model(
