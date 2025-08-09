@@ -27,7 +27,16 @@ print("Current working directory:", os.getcwd())
 # Create a fresh models directory each run (avoids permission errors)
 model_dir = os.path.join(os.getcwd(), "models")
 if os.path.exists(model_dir):
-    shutil.rmtree(model_dir)
+    for root, dirs, files in os.walk(model_dir):
+        for file in files:
+            try:
+                os.remove(os.path.join(root, file))
+            except Exception as e:
+                print(f"Warning: could not delete {file}: {e}")
+    try:
+        shutil.rmtree(model_dir)
+    except Exception as e:
+        print(f"Warning: could not remove models directory: {e}")
 os.makedirs(model_dir, exist_ok=True)
 
 # Load processed data
