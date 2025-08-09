@@ -1,4 +1,5 @@
 import os
+import shutil
 import pickle
 import traceback
 import mlflow
@@ -23,10 +24,11 @@ import numpy as np
 # Show working directory
 print("Current working directory:", os.getcwd())
 
-# Create models directory with guaranteed write permissions
+# Create a fresh models directory each run (avoids permission errors)
 model_dir = os.path.join(os.getcwd(), "models")
+if os.path.exists(model_dir):
+    shutil.rmtree(model_dir)
 os.makedirs(model_dir, exist_ok=True)
-os.chmod(model_dir, 0o777)
 
 # Load processed data
 try:
@@ -49,7 +51,7 @@ if isinstance(X_train, np.ndarray):
 if isinstance(X_test, np.ndarray):
     X_test = pd.DataFrame(X_test)
 
-# Models + Param Grids
+# Models + Parameter Grids
 tuning_models = {
     "Logistic Regression": (
         Pipeline([("scaler", StandardScaler()), ("clf", LogisticRegression(max_iter=1000, random_state=42))]),
@@ -81,7 +83,7 @@ tuning_models = {
     )
 }
 
-# Metric weights
+# Healthcare metric weights
 weights = {
     'Accuracy': 0.05,
     'Precision': 0.05,
@@ -142,12 +144,12 @@ with mlflow.start_run(run_name="mlflow_gridsearch_with_plots"):
         signature = infer_signature(X_test, best_model_gs.predict_proba(X_test))
         mlflow.sklearn.log_model(
             sk_model=best_model_gs,
-            name=f"{name}_gridsearch_model",  # switched from artifact_path
+            name=f"{name}_gridsearch_model",  # replaced artifact_path
             input_example=input_example,
             signature=signature
         )
 
-    # Save best model locally with guaranteed write permissions
+    # Save best model locally
     model_save_path = os.path.join(model_dir, "best_model.pkl")
     try:
         with open(model_save_path, 'wb') as f:
@@ -163,7 +165,7 @@ with mlflow.start_run(run_name="mlflow_gridsearch_with_plots"):
     mlflow.set_tag("best_model_name", best_model_name)
     mlflow.log_metric("best_weighted_score", best_score)
 
-    # Comparison DataFrame
+    # Create comparison DataFrame
     comparison_df = pd.DataFrame({
         model: {
             "Accuracy": res["Metrics"]["Accuracy"],
