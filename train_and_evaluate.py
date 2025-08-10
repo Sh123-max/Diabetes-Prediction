@@ -127,7 +127,7 @@ for name, (model, param_grid) in tuning_models.items():
         print(f"Training with GridSearchCV: {name}")
         print(f"MLflow Run Link: {run_link}")
 
-        grid = GridSearchCV(model, param_grid, scoring='recall', cv=5)
+        grid = GridSearchCV(model, param_grid, scoring='recall', cv=5 , n_jobs=-1)
         grid.fit(X_train, y_train)
 
         best_model_gs = grid.best_estimator_
