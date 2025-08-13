@@ -141,9 +141,7 @@ for name, (model, param_grid) in tuning_models.items():
     with mlflow.start_run(run_name=name):
         print(f"[INFO] Training model: {name}")
 
-        grid = GridSearchCV(model, param_grid,
-                            scoring='recall',
-                            cv=5, n_jobs=-1)
+        grid = GridSearchCV(model, param_grid, scoring='recall', cv=5, n_jobs=-1)
         grid.fit(X_train, y_train)
 
         best_model_gs = grid.best_estimator_
@@ -189,7 +187,7 @@ print(f"[INFO] Best Model: {best_model_name} (Score: {best_score:.4f})")
 print(f"[INFO] Saved best model at: {os.path.abspath(model_save_path)}")
 
 # ----------------------------
-# Plot comparisons & log
+# Plot comparisons & log charts
 # ----------------------------
 comparison_df = pd.DataFrame({
     model: {
@@ -203,6 +201,19 @@ comparison_df = pd.DataFrame({
     for model, res in model_results.items()
 }).T
 
+# Log metrics table to MLflow
+mlflow.log_table(data=comparison_df.reset_index().rename(columns={"index": "Model"}),
+                 artifact_file="all_model_metrics.json")
+
+# Also log best model's metrics and parameters as a table
+best_model_df = pd.DataFrame([{
+    "Model": best_model_name,
+    **model_results[best_model_name]["Metrics"],
+    **model_results[best_model_name]["Parameters"]
+}])
+mlflow.log_table(data=best_model_df, artifact_file="best_model_metrics.json")
+
+# Generate and log comparison plots
 for metric in ["Accuracy", "Precision", "Recall", "F1-Score", "ROC-AUC", "Weighted Score"]:
     plt.figure(figsize=(12, 6))
     sns.barplot(data=comparison_df.reset_index(), x="index", y=metric, palette="viridis", legend=False)
@@ -219,30 +230,23 @@ for metric in ["Accuracy", "Precision", "Recall", "F1-Score", "ROC-AUC", "Weight
 print("\nGridSearchCV tuning and MLflow logging complete.")
 
 # ----------------------------
-# MLflow model evaluation (NaN-safe & index-alignment safe)
+# MLflow model evaluation
 # ----------------------------
 print("\n[INFO] Starting MLflow evaluation for the best model...")
 mlflow.end_run()  # close any run to avoid conflicts
 
 with mlflow.start_run(run_name="Best_Model_Evaluation", nested=True) as eval_run:
     mlflow.sklearn.log_model(best_model, name="model")
-
-    # Reset indexes so X_test and y_test align properly
-    eval_data = X_test.reset_index(drop=True).copy()
-    y_eval = y_test.reset_index(drop=True).copy()
-
-    # Remove rows with NaN target values
-    not_nan_mask = y_eval.notna()
-    eval_data = eval_data.loc[not_nan_mask].copy()
-    y_eval = y_eval.loc[not_nan_mask].copy()
-
-    # Add target column for mlflow.evaluate
+    
+    # Align and drop NaNs
+    eval_data, y_eval = X_test.align(y_test, join='inner', axis=0)
+    valid_idx = y_eval.dropna().index
+    eval_data = eval_data.loc[valid_idx]
+    y_eval = y_eval.loc[valid_idx]
     eval_data["target"] = y_eval
 
-    # MLflow run URI for model
     model_uri = f"runs:/{eval_run.info.run_id}/model"
 
-    # Evaluate the model using MLflow's default evaluator
     evaluation_results = mlflow.evaluate(
         model=model_uri,
         data=eval_data,
@@ -250,6 +254,10 @@ with mlflow.start_run(run_name="Best_Model_Evaluation", nested=True) as eval_run
         model_type="classifier",
         evaluators="default"
     )
+
+    # Log evaluation results table
+    eval_results_df = pd.DataFrame([evaluation_results.metrics])
+    mlflow.log_table(data=eval_results_df, artifact_file="evaluation_metrics.json")
 
     print("\n[INFO] MLflow Evaluation Results:")
     print(evaluation_results)
