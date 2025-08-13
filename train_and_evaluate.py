@@ -170,7 +170,7 @@ for name, (model, param_grid) in tuning_models.items():
 
         input_example = X_test.iloc[:1]
         signature = infer_signature(X_test, best_model_gs.predict_proba(X_test))
-        mlflow.sklearn.log_model(best_model_gs, "model",
+        mlflow.sklearn.log_model(best_model_gs, name="model",
                                  input_example=input_example,
                                  signature=signature)
 
@@ -219,17 +219,23 @@ for metric in ["Accuracy", "Precision", "Recall", "F1-Score", "ROC-AUC", "Weight
 print("\nGridSearchCV tuning and MLflow logging complete.")
 
 # ----------------------------
-# MLflow model evaluation
+# MLflow model evaluation (NaN-safe)
 # ----------------------------
 print("\n[INFO] Starting MLflow evaluation for the best model...")
 mlflow.end_run()  # close any run to avoid conflicts
 
 with mlflow.start_run(run_name="Best_Model_Evaluation", nested=True) as eval_run:
-    mlflow.sklearn.log_model(best_model, "model")
+    mlflow.sklearn.log_model(best_model, name="model")
+    
+    # Clean evaluation data to avoid NaNs
     eval_data = X_test.copy()
-    eval_data["target"] = y_test
+    y_eval = y_test.copy()
+    not_nan_mask = y_eval.notna()
+    eval_data = eval_data.loc[not_nan_mask]
+    y_eval = y_eval.loc[not_nan_mask]
+    eval_data["target"] = y_eval
 
-    # ✅ Use proper MLflow model URI format
+    # MLflow run URI for model
     model_uri = f"runs:/{eval_run.info.run_id}/model"
 
     evaluation_results = mlflow.evaluate(
