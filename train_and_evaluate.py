@@ -21,13 +21,14 @@ import seaborn as sns
 import numpy as np
 
 print("Current working directory:", os.getcwd())
+
 # ✅ Persistent MLflow tracking server
 mlflow_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
 print(f"[INFO] Using MLflow Tracking URI: {mlflow_uri}")
 mlflow.set_tracking_uri(mlflow_uri)
 mlflow.set_experiment("Healthcare_Model_Comparison")
 
-# Clean models folder
+# Clean models directory
 model_dir = os.path.join(os.getcwd(), "models")
 if os.path.exists(model_dir):
     try:
@@ -89,7 +90,7 @@ tuning_models = {
     )
 }
 
-# Metric weights for selection
+# Metric weights for scoring
 weights = {
     'Accuracy': 0.05,
     'Precision': 0.05,
@@ -98,9 +99,13 @@ weights = {
     'ROC-AUC': 0.2
 }
 
-# Enable MLflow autolog
-mlflow.autolog(log_models=True, log_input_examples=True, log_model_signatures=True, log_datasets=True,
-               exclusive=False, disable=False)
+# Enable MLflow autologging
+mlflow.autolog(log_models=True,
+               log_input_examples=True,
+               log_model_signatures=True,
+               log_datasets=True,
+               exclusive=False,
+               disable=False)
 
 model_results = {}
 best_model = None
@@ -109,22 +114,26 @@ best_model_name = ""
 
 print("\nStarting GridSearchCV tuning and MLflow logging...\n")
 
-# Train models
+# Loop through models
 for name, (model, param_grid) in tuning_models.items():
     with mlflow.start_run(run_name=name):
         mlflow.set_tag("mlflow.runName", name)
         exp_id = mlflow.get_experiment_by_name("Healthcare_Model_Comparison").experiment_id
         print(f"Training with GridSearchCV: {name}")
-        print(f"MLflow Experiment Link: {mlflow.get_tracking_uri()}/#/experiments/{exp_id}")
-        
+        print(f"MLflow Experiment URL: {mlflow.get_tracking_uri()}/#/experiments/{exp_id}")
+
+        # Tune model
         grid = GridSearchCV(model, param_grid, scoring='recall', cv=5, n_jobs=-1)
         grid.fit(X_train, y_train)
 
         best_model_gs = grid.best_estimator_
         best_params = grid.best_params_
+
+        # Predictions
         y_pred = best_model_gs.predict(X_test)
         y_proba = best_model_gs.predict_proba(X_test)[:, 1]
 
+        # Calculate metrics
         metrics = {
             "Accuracy": accuracy_score(y_test, y_pred),
             "Precision": precision_score(y_test, y_pred),
@@ -135,14 +144,22 @@ for name, (model, param_grid) in tuning_models.items():
         weighted_score = sum(weights[m] * metrics[m] for m in weights)
         metrics["Weighted Score"] = weighted_score
 
+        # Save results
         model_results[name] = {"Model": best_model_gs, "Parameters": best_params, "Metrics": metrics}
+
         mlflow.log_metric("Weighted Score", weighted_score)
 
+        # Log model to MLflow
         input_example = X_test.iloc[:1]
         signature = infer_signature(X_test, best_model_gs.predict_proba(X_test))
-        mlflow.sklearn.log_model(sk_model=best_model_gs, name="model",
-                                 input_example=input_example, signature=signature)
+        mlflow.sklearn.log_model(
+            sk_model=best_model_gs,
+            name="model",
+            input_example=input_example,
+            signature=signature
+        )
 
+        # Update best model
         if weighted_score > best_score:
             best_score = weighted_score
             best_model = best_model_gs
@@ -160,7 +177,7 @@ except Exception as e:
 print(f"Best Model: {best_model_name} (Score: {best_score:.4f})")
 print(f"Saved best model at: {os.path.abspath(model_save_path)}")
 
-# Comparison plots
+# Create comparison plots
 comparison_df = pd.DataFrame({
     model: {
         "Accuracy": res["Metrics"]["Accuracy"],
@@ -188,9 +205,14 @@ for metric in ["Accuracy", "Precision", "Recall", "F1-Score", "ROC-AUC", "Weight
 
 print("\nGridSearchCV tuning and MLflow logging complete.")
 
-# ================= MLflow Model Evaluation =================
+# ====================== MLflow Evaluation ======================
 print("\n[INFO] Starting MLflow evaluation for the best model...")
-with mlflow.start_run(run_name="Best_Model_Evaluation"):
+
+# End any active run explicitly (just to be safe)
+mlflow.end_run()
+
+# Start evaluation run as nested to avoid conflicts
+with mlflow.start_run(run_name="Best_Model_Evaluation", nested=True):
     mlflow.sklearn.log_model(best_model, "model")
     eval_data = X_test.copy()
     eval_data["target"] = y_test
