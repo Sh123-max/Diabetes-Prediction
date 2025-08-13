@@ -219,7 +219,7 @@ for metric in ["Accuracy", "Precision", "Recall", "F1-Score", "ROC-AUC", "Weight
 print("\nGridSearchCV tuning and MLflow logging complete.")
 
 # ----------------------------
-# MLflow model evaluation (NaN-safe)
+# MLflow model evaluation (NaN + index alignment safe)
 # ----------------------------
 print("\n[INFO] Starting MLflow evaluation for the best model...")
 mlflow.end_run()  # close any run to avoid conflicts
@@ -227,12 +227,15 @@ mlflow.end_run()  # close any run to avoid conflicts
 with mlflow.start_run(run_name="Best_Model_Evaluation", nested=True) as eval_run:
     mlflow.sklearn.log_model(best_model, name="model")
     
-    # Clean evaluation data to avoid NaNs
-    eval_data = X_test.copy()
-    y_eval = y_test.copy()
-    not_nan_mask = y_eval.notna()
-    eval_data = eval_data.loc[not_nan_mask]
-    y_eval = y_eval.loc[not_nan_mask]
+    # Align features and target indexes
+    eval_data, y_eval = X_test.align(y_test, join='inner', axis=0)
+
+    # Drop rows where target is NaN
+    valid_idx = y_eval.dropna().index
+    eval_data = eval_data.loc[valid_idx]
+    y_eval = y_eval.loc[valid_idx]
+
+    # Add target column
     eval_data["target"] = y_eval
 
     # MLflow run URI for model
