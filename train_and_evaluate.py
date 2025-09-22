@@ -298,11 +298,26 @@ c_training_runs = Counter("ml_training_run_total",
                           ["job", "status", "host", "run_id"],
                           registry=registry)
 
+# ✅ New metrics: best model score and name indicator
+g_best_model_score = Gauge("ml_best_model_score",
+                           "Accuracy (or main score) of the best model",
+                           registry=registry)
+
+g_best_model_name = Gauge("ml_best_model_name",
+                          "Indicator for which model was best (1 if selected)",
+                          ["model"],
+                          registry=registry)
+
 # Set values
 g_best_score.labels(job=JOB_NAME, run_id=RUN_ID, host=HOSTNAME, model_name=best_model_name).set(best_score)
 g_training_duration.labels(job=JOB_NAME, run_id=RUN_ID, host=HOSTNAME).set(training_duration)
 c_training_runs.labels(job=JOB_NAME, status="success", host=HOSTNAME, run_id=RUN_ID).inc()
 
+# New metrics
+g_best_model_score.set(best_score)  # main score of best model
+g_best_model_name.labels(model=best_model_name).set(1)
+
+# Per-model metrics
 for model_name, res in model_results.items():
     for metric_name, value in res["Metrics"].items():
         try:
