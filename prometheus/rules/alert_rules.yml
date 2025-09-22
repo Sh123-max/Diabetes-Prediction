@@ -17,3 +17,12 @@ groups:
           severity: warning
         annotations:
           summary: "High prediction error rate (>5%)"
+
+      - alert: ModelAccuracyDrop
+        expr: ml_best_model_score < 0.6
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model accuracy dropped"
+          description: "Best model accuracy is below 85% for 5 minutes."
