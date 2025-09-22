@@ -23,6 +23,9 @@ INPUT_VALIDATION_ERRORS = Counter("input_validation_errors_total", "Input valida
 PREDICTION_LATENCY = Histogram("prediction_latency_seconds", "Prediction latency seconds",
                                buckets=(0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.5, 5.0))
 
+# 👉 Tagged code: ML model accuracy as Prometheus metric
+MODEL_ACCURACY = Gauge("ml_current_model_accuracy", "Accuracy of deployed ML model")
+
 # -----------------------------
 # Load model and metadata
 # -----------------------------
@@ -61,6 +64,11 @@ try:
             meta = json.load(f)
             model_name = meta.get("model_name", "Unknown")
             model_metrics = meta.get("metrics", {})
+
+            # 👉 Update Prometheus gauge with accuracy
+            if "accuracy" in model_metrics:
+                MODEL_ACCURACY.set(model_metrics["accuracy"])
+
         print("[✔] Loaded model metadata.")
     else:
         print("[⚠] Metadata file not found. Proceeding without metrics.")
