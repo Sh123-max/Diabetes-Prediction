@@ -333,3 +333,16 @@ push_to_gateway(PUSHGATEWAY,
                 registry=registry)
 
 print(f"[INFO] Pushed training metrics to Pushgateway at {PUSHGATEWAY} for job={JOB_NAME}, run_id={RUN_ID}")
+
+# ----------------------------
+# Test manual metric push (for verification)
+# ----------------------------
+from prometheus_client import Gauge, CollectorRegistry, push_to_gateway
+
+test_registry = CollectorRegistry()
+test_g = Gauge('ml_model_metric', 'Test metric', ['job','model_name','metric'], registry=test_registry)
+test_g.labels(job='ml_training', model_name='XGBoost', metric='Accuracy').set(0.9)
+
+push_to_gateway('http://localhost:9091', job='ml_training', registry=test_registry)
+print("[INFO] Test metric pushed to Pushgateway successfully.")
+
