@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'flask_app'
+    static_configs:
+      - targets: ['flask_app:5000']  # if using docker-compose; else host:port
+
+  - job_name: 'pushgateway'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['pushgateway:9091']
+
+# Optional: alerting
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - "/etc/prometheus/rules/alert_rules.yml"
