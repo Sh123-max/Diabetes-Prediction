@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 15s   # How often to scrape targets
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Scrape Flask app metrics
+  - job_name: 'flask_app'
+    static_configs:
+      - targets: ['localhost:5000']   # Change to 'flask_app:5000' if using Docker Compose
+
+  # Scrape Pushgateway metrics
+  - job_name: 'pushgateway'
+    honor_labels: true
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['localhost:9091']   # Change if Pushgateway runs elsewhere
+
+# Optional: Alertmanager config
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['localhost:9093']  # Enable only if running Alertmanager
+
+# Rule files (for custom alerts)
+rule_files:
+  - "/etc/prometheus/rules/alert_rules.yml"
+  - "alert_rules.yml"

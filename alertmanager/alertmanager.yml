@@ -1,0 +1,10 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'default'
+receivers:
+  - name: 'default'
+    # configure email/slack/webhook here
+    webhook_configs:
+      - url: 'http://your-webhook:9000/'   # placeholder
